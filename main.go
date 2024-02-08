@@ -12,10 +12,30 @@ import (
 	"gorm.io/gorm"
 )
 
+
+
+// Game represents a Tic Tac Toe game
+type Game struct {
+	gorm.Model
+	Board    string         // Representing the game board state (e.g., "XOXOXOXOX")
+	Users    []*User       `gorm:"many2many:game_users;"`
+	GameUsers []*GameUser `gorm:"foreignKey:GameID"`
+}
+
+// User represents a user
 type User struct {
-	ID       uint   `gorm:"primaryKey"`
-	Username string `gorm:"unique"`
-	Password string
+	gorm.Model
+	Username string
+	Games    []*Game       `gorm:"many2many:game_users;"`
+	GameUsers []*GameUser `gorm:"foreignKey:UserID"`
+}
+
+// GameUser represents the join table between games and users
+type GameUser struct {
+	gorm.Model
+	GameID  uint
+	UserID  uint
+	Role    string // Creator, Opponent, Spectator
 }
 
 // Define a JWT claims struct
@@ -34,7 +54,7 @@ func main() {
 		return
 	}
 	// Auto migrate the User model
-	db.AutoMigrate(&User{})
+	db.AutoMigrate(&Game{}, &User{}, &GameUser{})
 
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
