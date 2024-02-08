@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/labstack/echo/v4"
-
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -32,9 +34,6 @@ func main() {
 	})
 
 
-	// Define regular expression for validating username
-	usernameRegex := regexp.MustCompile("^[a-zA-Z0-9!@#$%^&*()_+-=]{6,12}$")
-
 	// Define the handler for POST request to create a new user
 	e.POST("/users", func(c echo.Context) error {
 		u := new(User)
@@ -50,15 +49,18 @@ func main() {
 		if db.Where("username = ?", u.Username).First(&existingUser).Error == nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Username already exists"})
 		}
-		// Validate password strength (just a simple example for demonstration)
-		if len(u.Password) < 8 {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Password must be at least 8 characters long"})
+		// Encrypt password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
 		}
+		u.Password = string(hashedPassword)
 		// Create user record
 		if err := db.Create(&u).Error; err != nil {
 			return err
 		}
 		return c.JSON(http.StatusCreated, u)
 	})
+
 	e.Logger.Fatal(e.Start(":1323"))
 }
