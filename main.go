@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"regexp"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -15,6 +16,12 @@ type User struct {
 	ID       uint   `gorm:"primaryKey"`
 	Username string `gorm:"unique"`
 	Password string
+}
+
+// Define a JWT claims struct
+type Claims struct {
+	Username string `json:"username"`
+	jwt.StandardClaims
 }
 
 func main() {
@@ -33,6 +40,36 @@ func main() {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
 
+
+	// Define the handler for POST request to generate JWT token
+	e.POST("/login", func(c echo.Context) error {
+		req := new(User)
+		if err := c.Bind(req); err != nil {
+			return err
+		}
+		// Find user by username
+		var user User
+		if err := db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid username or password"})
+		}
+		// Verify password
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid username or password"})
+		}
+		// Generate JWT token
+		claims := &Claims{
+			Username: user.Username,
+			StandardClaims: jwt.StandardClaims{
+				ExpiresAt: time.Now().Add(24 * time.Hour).Unix(), // Token expires in 24 hours
+			},
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString([]byte("secret"))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, map[string]string{"token": tokenString})
+	})
 
 	// Define the handler for POST request to create a new user
 	e.POST("/users", func(c echo.Context) error {
